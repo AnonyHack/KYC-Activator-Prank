@@ -359,7 +359,7 @@ def main():
     # Webhook and health check
     app = web.Application()
     app.router.add_get("/health", health_check)  # Add health check route
-    app.router.add_post(WEBHOOK_PATH, application.create_webhook_handler())  # Use create_webhook_handler()
+    app.router.add_post(WEBHOOK_PATH, RequestHandler(application))  # Use RequestHandler for webhook
 
     # Start the web server
     web.run_app(app, port=PORT)
