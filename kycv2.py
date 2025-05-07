@@ -241,8 +241,8 @@ async def contact_us(update: Update, context: ContextTypes.DEFAULT_TYPE):
     📞 *Contact Us*
 
     For inquiries or support, please reach out to:
-    - Email: support@kycudpbot.com
-    - Telegram: @supportKYCbot
+    - Email: Freenethubbusiness@gmail.com
+    - Telegram: @Silando
     """
     await update.message.reply_text(contact_info, parse_mode="Markdown")
 
@@ -298,6 +298,38 @@ async def unban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Error unbanning user: {str(e)}")
         await update.message.reply_text("⚠️ Unable to unban the user. Please check the user ID.")
 
+# Command: /broadcast (Admin only)
+async def broadcast_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Broadcast a message to all users (admin only)."""
+    if not is_admin(update.message.from_user.id):
+        await update.message.reply_text("⚠️ You are not authorized to use this command.")
+        return
+
+    # Get the broadcast message
+    broadcast_text = update.message.text.replace("/broadcast", "").strip()
+    if not broadcast_text:
+        await update.message.reply_text("⚠️ Please provide a message to broadcast. Example:\n`/broadcast Hello users!`", parse_mode="Markdown")
+        return
+
+    # Get all user IDs from the database
+    user_ids = [user["user_id"] for user in users_collection.find({}, {"user_id": 1})]
+    success = 0
+    failures = 0
+
+    await update.message.reply_text(f"📢 Starting broadcast to {len(user_ids)} users...")
+
+    # Send the broadcast message to all users
+    for user_id in user_ids:
+        try:
+            await context.bot.send_message(chat_id=user_id, text=broadcast_text)
+            success += 1
+        except Exception as e:
+            logger.warning(f"Failed to send broadcast to user {user_id}: {str(e)}")
+            failures += 1
+
+    # Send a summary of the broadcast
+    await update.message.reply_text(f"📢 Broadcast completed!\n✅ Success: {success}\n❌ Failures: {failures}")
+
 # Add all handlers to the application
 def main():
     application = Application.builder().token(BOT_TOKEN).build()
@@ -312,6 +344,7 @@ def main():
     application.add_handler(CommandHandler("unbanuser", unban_user))
     application.add_handler(CommandHandler("contactus", contact_us))
     application.add_handler(CommandHandler("stats", stats))
+    application.add_handler(CommandHandler("broadcast", broadcast_message))  # Added broadcast command
 
     # Message Handlers
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_phone_number))
