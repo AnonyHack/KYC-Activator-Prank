@@ -269,14 +269,20 @@ async def how_to_use(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def contact_us(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle the /contactus command."""
-    contact_info = """
-    📞 *Contact Us*
-
-    For inquiries or support, please reach out to:
-    - Email: Freenethubbusiness@gmail.com
-    - Telegram: @Silando
-    """
-    await update.message.reply_text(contact_info, parse_mode="Markdown")
+    contact_text = (
+        "📞 ★彡( 𝕮𝖔𝖓𝖙𝖆𝖈𝖙 𝖀𝖘 )彡★ 📞\n\n"
+        "📧 Eᴍᴀɪʟ: `freenethubbusiness@gmail.com`\n\n"
+        "Fᴏʀ Aɴʏ Iꜱꜱᴜᴇꜱ, Bᴜꜱɪɴᴇꜱꜱ Dᴇᴀʟꜱ Oʀ IɴQᴜɪʀɪᴇꜱ, Pʟᴇᴀꜱᴇ Rᴇᴀᴄʜ Oᴜᴛ Tᴏ Uꜱ \n\n"
+        "❗ *ONLY FOR BUSINESS AND HELP, DON'T SPAM!*"
+    )
+    
+    keyboard = [[InlineKeyboardButton("📩 Mᴇꜱꜱᴀɢᴇ Aᴅᴍɪɴ", url="https://t.me/Silando")]]
+    
+    await update.message.reply_text(
+        contact_text,
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle the /stats command."""
@@ -285,7 +291,12 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     user_count = get_user_count()
-    await update.message.reply_text(f"📊 Total unique users: {user_count}")
+    activated_count = leaderboard_collection.count_documents({})
+    text = f"📊 *Bᴏᴛ Sᴛᴀᴛɪꜱᴛɪᴄꜱ*\n\n"
+    text += f"👥 Tᴏᴛᴀʟ Uꜱᴇʀꜱ: {user_count}\n"
+    text += f"✅ Tᴏᴛᴀʟ Aᴄᴛɪᴠᴀᴛɪᴏɴꜱ: {activated_count}\n\n"
+
+    await update.message.reply_text(text, parse_mode="Markdown")
 
 async def broadcast_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Broadcast a message to all users."""
@@ -337,8 +348,8 @@ def main():
     application.add_handler(CommandHandler("leaderboard", leaderboard))
     application.add_handler(CommandHandler("howtouse", how_to_use))
     application.add_handler(CommandHandler("resetleaderboard", reset_leaderboard))
-    application.add_handler(CommandHandler("contactus", contact_us))
-    application.add_handler(CommandHandler("stats", stats))
+    application.add_handler(CommandHandler("contactus", contact_us))  # Updated contactus command
+    application.add_handler(CommandHandler("stats", stats))  # Updated stats command
     application.add_handler(CommandHandler("broadcast", broadcast_message))
     
     # Message handler for phone number
