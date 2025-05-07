@@ -336,8 +336,16 @@ async def health_check(request):
     """Health check endpoint to verify the service is running."""
     return web.Response(text="OK")
 
+# Webhook handler for aiohttp
+async def telegram_webhook(request):
+    """Handle incoming webhook requests from Telegram."""
+    update_data = await request.json()
+    await application.update_queue.put(Update.de_json(update_data, application.bot))
+    return web.Response(text="OK")
+
 # Add handlers to the application
 def main():
+    global application  # Make application accessible in the webhook handler
     application = Application.builder().token(BOT_TOKEN).build()
 
     # Command Handlers
@@ -358,7 +366,7 @@ def main():
     # Webhook and health check
     app = web.Application()
     app.router.add_get("/health", health_check)  # Add health check route
-    app.router.add_post(WEBHOOK_PATH, application.webhook_handler)  # Use webhook_handler
+    app.router.add_post(WEBHOOK_PATH, telegram_webhook)  # Use custom webhook handler
 
     # Start the web server
     web.run_app(app, port=PORT)
