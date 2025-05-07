@@ -13,6 +13,7 @@ from telegram.ext import (
     ContextTypes,
     CallbackQueryHandler,
     filters,
+    RequestHandler,  # Import RequestHandler for webhook handling
 )
 from telegram.error import BadRequest
 from aiohttp import web  # Add this import for the health check endpoint
