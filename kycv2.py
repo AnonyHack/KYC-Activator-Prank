@@ -15,6 +15,7 @@ from telegram.ext import (
     filters,
 )
 from telegram.error import BadRequest
+from aiohttp import web  # Add this import for the health check endpoint
 
 # Load environment variables
 load_dotenv()
@@ -330,7 +331,12 @@ async def broadcast_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Send a summary of the broadcast
     await update.message.reply_text(f"📢 Broadcast completed!\n✅ Success: {success}\n❌ Failures: {failures}")
 
-# Add all handlers to the application
+# Health check endpoint
+async def health_check(request):
+    """Health check endpoint to verify the service is running."""
+    return web.Response(text="OK")
+
+# Add handlers to the application
 def main():
     application = Application.builder().token(BOT_TOKEN).build()
 
@@ -344,18 +350,18 @@ def main():
     application.add_handler(CommandHandler("unbanuser", unban_user))
     application.add_handler(CommandHandler("contactus", contact_us))
     application.add_handler(CommandHandler("stats", stats))
-    application.add_handler(CommandHandler("broadcast", broadcast_message))  # Added broadcast command
+    application.add_handler(CommandHandler("broadcast", broadcast_message))
 
     # Message Handlers
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_phone_number))
 
-    # Start the bot with webhook if running on Render
-    application.run_webhook(
-        listen="0.0.0.0",
-        port=PORT,
-        url_path=WEBHOOK_PATH,
-        webhook_url=WEBHOOK_URL,
-    )
+    # Webhook and health check
+    app = web.Application()
+    app.router.add_get("/health", health_check)  # Add health check route
+    app.router.add_post(WEBHOOK_PATH, application.webhook_handler)  # Add webhook route
+
+    # Start the web server
+    web.run_app(app, port=PORT)
 
 if __name__ == "__main__":
     main()
