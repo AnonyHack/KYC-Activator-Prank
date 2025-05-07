@@ -30,8 +30,8 @@ BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 ADMIN_IDS = [int(admin_id) for admin_id in os.getenv("ADMIN_IDS", "").split(",") if admin_id]
 
 # Force Join Configuration
-CHANNEL_USERNAMES = os.getenv("CHANNEL_USERNAMES", "@megahubbots", "@Freenethubz", "@Freenethubchannel").split(",")
-CHANNEL_LINKS = os.getenv("CHANNEL_LINKS", "https://t.me/megahubbots", "https://t.me/Freenethubz", "https://t.me/Freenethubchannel").split(",")
+CHANNEL_USERNAMES = os.getenv("CHANNEL_USERNAMES", "@megahubbots,@Freenethubz,@Freenethubchannel").split(",")
+CHANNEL_LINKS = os.getenv("CHANNEL_LINKS", "https://t.me/megahubbots,https://t.me/Freenethubz,https://t.me/Freenethubchannel").split(",")
 
 # MongoDB connection
 client = MongoClient(os.getenv("MONGODB_URI"))
@@ -220,6 +220,84 @@ async def reset_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     leaderboard_collection.delete_many({})
     await update.message.reply_text("🔄 Leaderboard has been reset!")
 
+# Command: /howtouse
+async def how_to_use(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle the /howtouse command."""
+    instructions = """
+    📝 *How to Use the KYC UDP Activator Bot* 📝
+
+    1️⃣ Start by clicking /start to begin.
+    2️⃣ Ensure you're a member of the required channels.
+    3️⃣ Use /activatekyc to start the activation process.
+    4️⃣ Follow the instructions and provide your phone number.
+    5️⃣ Enjoy the fun KYC activation response! 🎉
+    """
+    await update.message.reply_text(instructions, parse_mode="Markdown")
+
+# Command: /contactus
+async def contact_us(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle the /contactus command."""
+    contact_info = """
+    📞 *Contact Us*
+
+    For inquiries or support, please reach out to:
+    - Email: support@kycudpbot.com
+    - Telegram: @supportKYCbot
+    """
+    await update.message.reply_text(contact_info, parse_mode="Markdown")
+
+# Command: /stats (Admin only)
+async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle the /stats command."""
+    if not is_admin(update.message.from_user.id):
+        await update.message.reply_text("⚠️ You are not authorized to use this command.")
+        return
+
+    user_count = users_collection.count_documents({})
+    await update.message.reply_text(f"📊 Total unique users: {user_count}")
+
+# Command: /banuser (Admin only)
+async def ban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle the /banuser command."""
+    if not is_admin(update.message.from_user.id):
+        await update.message.reply_text("⚠️ You are not authorized to use this command.")
+        return
+
+    if not context.args:
+        await update.message.reply_text("⚠️ Please specify the user ID to ban.")
+        return
+
+    user_id_to_ban = int(context.args[0])
+    try:
+        users_collection.delete_one({"user_id": user_id_to_ban})
+        await update.message.reply_text(f"✅ User {user_id_to_ban} has been banned.")
+    except Exception as e:
+        logger.error(f"Error banning user: {str(e)}")
+        await update.message.reply_text("⚠️ Unable to ban the user. Please check the user ID.")
+
+# Command: /unbanuser (Admin only)
+async def unban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle the /unbanuser command."""
+    if not is_admin(update.message.from_user.id):
+        await update.message.reply_text("⚠️ You are not authorized to use this command.")
+        return
+
+    if not context.args:
+        await update.message.reply_text("⚠️ Please specify the user ID to unban.")
+        return
+
+    user_id_to_unban = int(context.args[0])
+    try:
+        users_collection.update_one(
+            {"user_id": user_id_to_unban},
+            {"$set": {"banned": False}},
+            upsert=True
+        )
+        await update.message.reply_text(f"✅ User {user_id_to_unban} has been unbanned.")
+    except Exception as e:
+        logger.error(f"Error unbanning user: {str(e)}")
+        await update.message.reply_text("⚠️ Unable to unban the user. Please check the user ID.")
+
 # Add all handlers to the application
 def main():
     application = Application.builder().token(BOT_TOKEN).build()
@@ -228,7 +306,12 @@ def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("activatekyc", activate_kyc))
     application.add_handler(CommandHandler("leaderboard", leaderboard))
+    application.add_handler(CommandHandler("howtouse", how_to_use))
     application.add_handler(CommandHandler("resetleaderboard", reset_leaderboard))
+    application.add_handler(CommandHandler("banuser", ban_user))
+    application.add_handler(CommandHandler("unbanuser", unban_user))
+    application.add_handler(CommandHandler("contactus", contact_us))
+    application.add_handler(CommandHandler("stats", stats))
 
     # Message Handlers
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_phone_number))
