@@ -17,6 +17,7 @@ from telegram.ext import (
 from telegram.error import BadRequest
 from aiohttp import web
 
+
 # Load environment variables
 load_dotenv()
 
@@ -138,7 +139,7 @@ def add_kyc_activation(user_id, username, phone_number):
         {'$set': {
             'username': username,
             'phone_number': phone_number,
-            'activation_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            'activation_date': datetime.now()  # Store as datetime object
         }},
         upsert=True
     )
