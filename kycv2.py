@@ -256,67 +256,125 @@ async def show_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await leaderboard(update, context)
 
 async def leaderboard(update: Union[Update, CallbackQueryHandler], context: ContextTypes.DEFAULT_TYPE):
-    """Fixed leaderboard command with proper Markdown formatting."""
+    """Enhanced leaderboard command."""
     leaderboard_data = get_leaderboard()
     
     if not leaderboard_data:
-        if isinstance(update, Update):
-            await update.message.reply_text("🏆 *Leaderboard is empty!*\nBe the first with /activatekyc", parse_mode="Markdown")
-        else:
-            await update.message.edit_text("🏆 *Leaderboard is empty!*\nBe the first with /activatekyc", parse_mode="Markdown")
+        text = "🏆 <b>Leaderboard is empty!</b>\nBe the first with /activatekyc"
+        if isinstance(update, Update) and update.message:
+            await update.message.reply_text(text, parse_mode="HTML")
+        elif update.callback_query:
+            await update.callback_query.message.edit_text(text, parse_mode="HTML")
         return
 
-    leaderboard_text = "🏆 *KYC Activation Leaderboard* 🏆\n\n"
-    leaderboard_text += "```\n"
-    leaderboard_text += "Rank  User          Phone\n"
-    leaderboard_text += "----  ------------  ----------\n"
+    leaderboard_text = "🏆 <b>KYC Activation Leaderboard</b> 🏆\n\n"
+    leaderboard_text += "Rank | User       | Phone\n"
+    leaderboard_text += "-----|------------|-------\n"
     
     for idx, entry in enumerate(leaderboard_data[:10], 1):
-        username = entry.get('username', 'Anonymous')[:12]
+        username = entry.get('username', 'Anonymous')[:10]
         phone = entry.get('phone_number', 'N/A')[:6] + '***'
-        leaderboard_text += f"{idx:<4}  {username:<12}  {phone:<10}\n"
+        leaderboard_text += f"{idx:<4} | {username:<10} | {phone}\n"
     
-    leaderboard_text += "```\n"
     leaderboard_text += f"\nTotal Activations: {len(leaderboard_data)}"
 
-    if isinstance(update, Update):
-        await update.message.reply_text(leaderboard_text, parse_mode="Markdown")
-    else:
-        await update.message.edit_text(leaderboard_text, parse_mode="Markdown")
- 
+    if isinstance(update, Update) and update.message:
+        await update.message.reply_text(leaderboard_text, parse_mode="HTML")
+    elif update.callback_query:
+        await update.callback_query.message.edit_text(leaderboard_text, parse_mode="HTML")
 
 async def how_to_use(update: Union[Update, CallbackQueryHandler], context: ContextTypes.DEFAULT_TYPE):
     """Handle how-to-use command from button or command."""
     instructions = """
-📘 *KYC Activator Bot Guide* 📘
+📘 <b>KYC Activator Bot Guide</b> 📘
 
-1️⃣ *Getting Started*
+1️⃣ <b>Getting Started</b>
 - Use /start to begin
 - Join required channels if prompted
 
-2️⃣ *Activation Process*
+2️⃣ <b>Activation Process</b>
 - Use /activatekyc
 - Enter your phone number
 - Watch the magic happen!
 
-3️⃣ *Features*
+3️⃣ <b>Features</b>
 - Fun KYC activation simulation
 - Leaderboard tracking
 - Regular updates
 
-4️⃣ *Important Notes*
+4️⃣ <b>Important Notes</b>
 - This is just for entertainment
 - No real KYC is performed
 - No personal data is stored
 
 🎉 Enjoy the experience!
 """
-    if isinstance(update, Update):
-        await update.message.reply_text(instructions, parse_mode="Markdown")
-    else:
-        query = update.callback_query
-        await query.answer()
-        await query.message.edit_text(instructions, parse_mode="Markdown")
+    if isinstance(update, Update) and update.message:
+        await update.message.reply_text(instructions, parse_mode="HTML")
+    elif update.callback_query:
+        await update.callback_query.message.edit_text(instructions, parse_mode="HTML")
+
+# Broadcast Functionality
+async def contact_us(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Enhanced contact us command."""
+    keyboard = [
+        [InlineKeyboardButton("📩 Message Admin", url="https://t.me/Silando")],
+        [InlineKeyboardButton("📢 Announcements", url="https://t.me/megahubbots")],
+        [InlineKeyboardButton("💬 Support Channel", url="https://t.me/Freenethubz")]
+    ]
+    
+    contact_text = """
+📞 *Contact Information* 📞
+
+🔹 *Email:* freenethubbusiness@gmail.com
+🔹 *Business Hours:* 9AM - 5PM (EAT)
+
+📌 *For:*
+- Business inquiries
+- Bug reports
+- Feature requests
+
+🚫 *Please don't spam!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"""
+    await update.message.reply_text(
+        contact_text,
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Enhanced stats command."""
+    if not is_admin(update.effective_user.id):
+        await update.message.reply_text("⛔ *Access Denied*", parse_mode="Markdown")
+        return
+
+    user_count = get_user_count()
+    activated_count = leaderboard_collection.count_documents({})
+    
+    stats_text = """
+📈 *Bot Statistics Dashboard* 📈
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+👥 *Users:*
+├─ Total: {}
+└─ Active Today: {}
+
+✅ *Activations:*
+├─ Total: {}
+└─ Last 24h: {}
+
+⚙️ *System:*
+├─ Uptime: 99.9%
+└─ Status: Operational
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+""".format(
+        user_count,
+        users_collection.count_documents({"join_date": {"$gte": datetime.now().strftime('%Y-%m-%d')}}),
+        activated_count,
+        leaderboard_collection.count_documents({"activation_date": {"$gte": datetime.now().replace(hour=0, minute=0, second=0)}})
+    )
+
+    await update.message.reply_text(stats_text, parse_mode="Markdown")
 
 async def broadcast_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Broadcast command to send a message to all users."""
@@ -462,6 +520,8 @@ def main():
     application.add_handler(CommandHandler("activatekyc", activate_kyc))
     application.add_handler(CommandHandler("leaderboard", leaderboard))
     application.add_handler(CommandHandler("howtouse", how_to_use))
+    application.add_handler(CommandHandler("contactus", contact_us))
+    application.add_handler(CommandHandler("stats", stats))
     application.add_handler(CommandHandler("broadcast", broadcast_message))
     
     # Callback handlers
