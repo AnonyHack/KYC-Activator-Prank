@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 CONFIG = {
     'token': os.getenv('TELEGRAM_BOT_TOKEN'),
     'admin_ids': [int(id) for id in os.getenv('ADMIN_IDS', '').split(',') if id],
-    'welcome_image': os.getenv('WELCOME_IMAGE_URL', 'https://example.com/welcome.jpg')
+    'welcome_image': os.getenv('WELCOME_IMAGE_URL', 'https://envs.sh/7_3.jpg')
 }
 
 # Force Join Configuration
