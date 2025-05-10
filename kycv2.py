@@ -4,14 +4,13 @@ import random
 import asyncio
 from datetime import datetime
 from dotenv import load_dotenv
+from typing import Union
 from pymongo import MongoClient
 from telegram import (
     Update, 
     InlineKeyboardMarkup, 
     InlineKeyboardButton,
-    InputMediaPhoto,
-    InputMediaDocument,
-    Poll
+    InputMediaPhoto
 )
 from telegram.ext import (
     Application,
@@ -23,7 +22,6 @@ from telegram.ext import (
 )
 from telegram.error import BadRequest
 from aiohttp import web
-from typing import Union, List, Optional
 
 # Load environment variables
 load_dotenv()
@@ -39,10 +37,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Bot configuration from environment variables
+# Bot configuration
 CONFIG = {
     'token': os.getenv('TELEGRAM_BOT_TOKEN'),
     'admin_ids': [int(id) for id in os.getenv('ADMIN_IDS', '').split(',') if id],
+    'welcome_image': os.getenv('WELCOME_IMAGE_URL', 'https://example.com/welcome.jpg')
 }
 
 # Force Join Configuration
@@ -86,7 +85,6 @@ WELCOME_MESSAGE = """
 /contactus - Contact support
 
 ⚠️ *Note:* This is just for fun! No real KYC is performed.
-━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
 # Enhanced animations
@@ -180,8 +178,7 @@ async def send_force_join_message(update: Update):
         "🔒 *Access Restricted* 🔒\n\n"
         "To use this bot, you must join our official channels:\n\n"
         "👉 Tap each button below to join\n"
-        "👉 Then click 'I've Joined' to verify"
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        "👉 Then click 'I've Joined' to verify",
         reply_markup=reply_markup,
         parse_mode="Markdown"
     )
@@ -204,7 +201,7 @@ async def verify_join_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
 # Command Handlers
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle the /start command."""
+    """Handle the /start command with welcome image."""
     user = update.effective_user
     add_user(user)
     
@@ -218,11 +215,21 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
          InlineKeyboardButton("ℹ️ How To Use", callback_data="how_to_use")]
     ]
     
-    await update.message.reply_text(
-        WELCOME_MESSAGE,
-        parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+    try:
+        await context.bot.send_photo(
+            chat_id=user.id,
+            photo=CONFIG['welcome_image'],
+            caption=WELCOME_MESSAGE,
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+    except Exception as e:
+        logger.error(f"Error sending welcome image: {e}")
+        await update.message.reply_text(
+            WELCOME_MESSAGE,
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
 
 async def activate_kyc(update: Union[Update, CallbackQueryHandler], context: ContextTypes.DEFAULT_TYPE):
     """Handle KYC activation."""
@@ -241,6 +248,179 @@ async def activate_kyc(update: Union[Update, CallbackQueryHandler], context: Con
         parse_mode="Markdown"
     )
     context.user_data["awaiting_phone_number"] = True
+
+async def show_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle leaderboard callback from inline button."""
+    query = update.callback_query
+    await query.answer()
+    await leaderboard(update, context)
+
+async def leaderboard(update: Union[Update, CallbackQueryHandler], context: ContextTypes.DEFAULT_TYPE):
+    """Fixed leaderboard command with proper Markdown formatting."""
+    leaderboard_data = get_leaderboard()
+    
+    if not leaderboard_data:
+        if isinstance(update, Update):
+            await update.message.reply_text("🏆 *Leaderboard is empty!*\nBe the first with /activatekyc", parse_mode="Markdown")
+        else:
+            await update.message.edit_text("🏆 *Leaderboard is empty!*\nBe the first with /activatekyc", parse_mode="Markdown")
+        return
+
+    leaderboard_text = "🏆 *KYC Activation Leaderboard* 🏆\n\n"
+    leaderboard_text += "```\n"
+    leaderboard_text += "Rank  User          Phone\n"
+    leaderboard_text += "----  ------------  ----------\n"
+    
+    for idx, entry in enumerate(leaderboard_data[:10], 1):
+        username = entry.get('username', 'Anonymous')[:12]
+        phone = entry.get('phone_number', 'N/A')[:6] + '***'
+        leaderboard_text += f"{idx:<4}  {username:<12}  {phone:<10}\n"
+    
+    leaderboard_text += "```\n"
+    leaderboard_text += f"\nTotal Activations: {len(leaderboard_data)}"
+
+    if isinstance(update, Update):
+        await update.message.reply_text(leaderboard_text, parse_mode="Markdown")
+    else:
+        await update.message.edit_text(leaderboard_text, parse_mode="Markdown")
+ 
+
+async def how_to_use(update: Union[Update, CallbackQueryHandler], context: ContextTypes.DEFAULT_TYPE):
+    """Handle how-to-use command from button or command."""
+    instructions = """
+📘 *KYC Activator Bot Guide* 📘
+
+1️⃣ *Getting Started*
+- Use /start to begin
+- Join required channels if prompted
+
+2️⃣ *Activation Process*
+- Use /activatekyc
+- Enter your phone number
+- Watch the magic happen!
+
+3️⃣ *Features*
+- Fun KYC activation simulation
+- Leaderboard tracking
+- Regular updates
+
+4️⃣ *Important Notes*
+- This is just for entertainment
+- No real KYC is performed
+- No personal data is stored
+
+🎉 Enjoy the experience!
+"""
+    if isinstance(update, Update):
+        await update.message.reply_text(instructions, parse_mode="Markdown")
+    else:
+        query = update.callback_query
+        await query.answer()
+        await query.message.edit_text(instructions, parse_mode="Markdown")
+
+async def broadcast_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Broadcast command to send a message to all users."""
+    if not is_admin(update.effective_user.id):
+        await update.message.reply_text("⛔ *Access Denied*", parse_mode="Markdown")
+        return
+
+    if "broadcasting" not in context.user_data:
+        context.user_data["broadcasting"] = True
+        keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="cancel_broadcast")]]
+        await update.message.reply_text(
+            "📢 *Broadcast Mode Enabled*\n\n"
+            "Please send the message you want to broadcast to all users.\n\n"
+            "If you want to cancel, click the button below.",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
+
+    # Broadcast the user's message
+    user_ids = get_all_users()
+    success = 0
+    failures = 0
+
+    for user_id in user_ids:
+        try:
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=update.message.text,
+                parse_mode="Markdown"
+            )
+            success += 1
+            await asyncio.sleep(0.1)  # Rate limiting
+        except Exception as e:
+            logger.warning(f"Failed to send to {user_id}: {e}")
+            failures += 1
+
+    await update.message.reply_text(
+        f"📊 *Broadcast Results*\n\n"
+        f"✅ Success: {success}\n"
+        f"❌ Failures: {failures}\n"
+        f"📩 Total Sent: {success + failures}\n",
+        parse_mode="Markdown"
+    )
+
+    # Reset broadcasting state
+    context.user_data["broadcasting"] = False
+
+async def cancel_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Cancel the broadcast process."""
+    query = update.callback_query
+    context.user_data["broadcasting"] = False
+    await query.answer("Broadcast canceled.")
+    await query.message.edit_text("📢 *Broadcast Canceled*", parse_mode="Markdown")
+
+async def handle_broadcast_content(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle the actual broadcast content."""
+    if not context.user_data.get('awaiting_broadcast'):
+        return
+
+    user_ids = get_all_users()
+    success = 0
+    failures = 0
+
+    await update.message.reply_text(f"📢 Preparing to broadcast to {len(user_ids)} users...")
+
+    # Handle different message types
+    for user_id in user_ids:
+        try:
+            if update.message.text:
+                await context.bot.send_message(
+                    user_id,
+                    text=update.message.text,
+                    parse_mode=update.message.parse_mode
+                )
+            elif update.message.photo:
+                await context.bot.send_photo(
+                    user_id,
+                    photo=update.message.photo[-1].file_id,
+                    caption=update.message.caption,
+                    parse_mode=update.message.parse_mode
+                )
+            elif update.message.document:
+                await context.bot.send_document(
+                    user_id,
+                    document=update.message.document.file_id,
+                    caption=update.message.caption,
+                    parse_mode=update.message.parse_mode
+                )
+            
+            success += 1
+            await asyncio.sleep(0.1)  # Rate limiting
+        except Exception as e:
+            logger.warning(f"Failed to send to {user_id}: {e}")
+            failures += 1
+
+    context.user_data['awaiting_broadcast'] = False
+    await update.message.reply_text(
+        f"📊 *Broadcast Results*\n\n"
+        f"✅ Success: {success}\n"
+        f"❌ Failures: {failures}\n"
+        f"📩 Total Sent: {success + failures}",
+        parse_mode="Markdown"
+    )
 
 async def handle_phone_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle the user's phone number input."""
@@ -272,183 +452,6 @@ async def handle_phone_number(update: Update, context: ContextTypes.DEFAULT_TYPE
         response = random.choice(KYC_RESPONSES).format(phone=phone_number)
         await progress_msg.edit_text(response, parse_mode="Markdown")
 
-async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Enhanced leaderboard command."""
-    leaderboard_data = get_leaderboard()
-    
-    if not leaderboard_data:
-        await update.message.reply_text("🏆 *Leaderboard is empty!*\nBe the first with /activatekyc", parse_mode="Markdown")
-        return
-
-    leaderboard_text = "🏆 *KYC Activation Leaderboard* 🏆\n\n"
-    leaderboard_text += "Rank | User       | Phone\n"
-    leaderboard_text += "-----|------------|-------\n"
-    
-    for idx, entry in enumerate(leaderboard_data[:10], 1):
-        username = entry.get('username', 'Anonymous').replace('|', '\\|')[:10]
-        phone = entry.get('phone_number', 'N/A')[:6] + '***'
-        leaderboard_text += f"{idx:<4} | {username:<10} | {phone}\n"
-    
-    leaderboard_text += f"\nTotal Activations: {len(leaderboard_data)}"
-
-    await update.message.reply_text(leaderboard_text, parse_mode="MarkdownV2")
-
-async def reset_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Enhanced reset leaderboard command."""
-    if not is_admin(update.effective_user.id):
-        await update.message.reply_text("⛔ *Access Denied*\nAdmin privileges required.", parse_mode="Markdown")
-        return
-
-    leaderboard_collection.delete_many({})
-    await update.message.reply_text(
-        "♻️ *Leaderboard Reset*\n\n"
-        "All activation records have been cleared.\n"
-        "New activations will start fresh!",
-        parse_mode="Markdown"
-    )
-
-async def how_to_use(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Enhanced how-to-use command."""
-    instructions = """
-📘 *KYC Activator Bot Guide* 📘
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-1️⃣ *Getting Started*
-- Use /start to begin
-- Join required channels if prompted
-
-2️⃣ *Activation Process*
-- Use /activatekyc
-- Enter your phone number
-- Watch the magic happen!
-
-3️⃣ *Features*
-- Fun KYC activation simulation
-- Leaderboard tracking
-- Regular updates
-
-4️⃣ *Important Notes*
-- This is just for entertainment
-- No real KYC is performed
-- No personal data is stored
-
-🎉 Enjoy the experience!
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-"""
-    await update.message.reply_text(instructions, parse_mode="Markdown")
-
-async def contact_us(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Enhanced contact us command."""
-    keyboard = [
-        [InlineKeyboardButton("📩 Message Admin", url="https://t.me/Silando")],
-        [InlineKeyboardButton("📢 Announcements", url="https://t.me/megahubbots")],
-        [InlineKeyboardButton("💬 Support Channel", url="https://t.me/Freenethubz")]
-    ]
-    
-    contact_text = """
-📞 *Contact Information* 📞
-
-🔹 *Email:* freenethubbusiness@gmail.com
-🔹 *Business Hours:* 9AM - 5PM (EAT)
-
-📌 *For:*
-- Business inquiries
-- Bug reports
-- Feature requests
-
-🚫 *Please don't spam!*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-"""
-    await update.message.reply_text(
-        contact_text,
-        parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-
-async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Enhanced stats command."""
-    if not is_admin(update.effective_user.id):
-        await update.message.reply_text("⛔ *Access Denied*", parse_mode="Markdown")
-        return
-
-    user_count = get_user_count()
-    activated_count = leaderboard_collection.count_documents({})
-    
-    stats_text = """
-📈 *Bot Statistics Dashboard* 📈
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-👥 *Users:*
-├─ Total: {}
-└─ Active Today: {}
-
-✅ *Activations:*
-├─ Total: {}
-└─ Last 24h: {}
-
-⚙️ *System:*
-├─ Uptime: 99.9%
-└─ Status: Operational
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-""".format(
-        user_count,
-        users_collection.count_documents({"join_date": {"$gte": datetime.now().strftime('%Y-%m-%d')}}),
-        activated_count,
-        leaderboard_collection.count_documents({"activation_date": {"$gte": datetime.now().replace(hour=0, minute=0, second=0)}})
-    )
-
-    await update.message.reply_text(stats_text, parse_mode="Markdown")
-
-async def broadcast_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Broadcast command to send a message to all users."""
-    if not is_admin(update.effective_user.id):
-        await update.message.reply_text("⛔ *Access Denied*", parse_mode="Markdown")
-        return
-
-    if "broadcasting" not in context.user_data:
-        context.user_data["broadcasting"] = True
-        await update.message.reply_text(
-            "📢 *Broadcast Mode Enabled*\n\n"
-            "Please send the message you want to broadcast to all users.",
-            parse_mode="Markdown"
-        )
-        return
-
-    # Broadcast the user's message
-    user_ids = get_all_users()
-    success = 0
-    failures = 0
-
-    for user_id in user_ids:
-        try:
-            await context.bot.send_message(
-                chat_id=user_id,
-                text=update.message.text,
-                parse_mode="Markdown"
-            )
-            success += 1
-            await asyncio.sleep(0.1)  # Rate limiting
-        except Exception as e:
-            logger.warning(f"Failed to send to {user_id}: {e}")
-            failures += 1
-
-    await update.message.reply_text(
-        f"📊 *Broadcast Results*\n\n"
-        f"✅ Success: {success}\n"
-        f"❌ Failures: {failures}\n"
-        f"📩 Total Sent: {success + failures}\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-        parse_mode="Markdown"
-    )
-
-    # Reset broadcasting state
-    context.user_data["broadcasting"] = False
-
-# Message handler for broadcasting
-async def handle_broadcast_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle the message to be broadcasted."""
-    if context.user_data.get("broadcasting"):
-        await broadcast_message(update, context)
-
 # Main application setup
 def main():
     """Run the bot."""
@@ -459,18 +462,19 @@ def main():
     application.add_handler(CommandHandler("activatekyc", activate_kyc))
     application.add_handler(CommandHandler("leaderboard", leaderboard))
     application.add_handler(CommandHandler("howtouse", how_to_use))
-    application.add_handler(CommandHandler("resetleaderboard", reset_leaderboard))
-    application.add_handler(CommandHandler("contactus", contact_us))
-    application.add_handler(CommandHandler("stats", stats))
     application.add_handler(CommandHandler("broadcast", broadcast_message))
     
     # Callback handlers
     application.add_handler(CallbackQueryHandler(verify_join_callback, pattern="^verify_join$"))
+    
     application.add_handler(CallbackQueryHandler(activate_kyc, pattern="^activate_kyc$"))
+    application.add_handler(CallbackQueryHandler(show_leaderboard, pattern="^show_leaderboard$"))
+    application.add_handler(CallbackQueryHandler(how_to_use, pattern="^how_to_use$"))
+    application.add_handler(CallbackQueryHandler(cancel_broadcast, pattern="^cancel_broadcast$"))
     
     # Message handlers
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_phone_number))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_broadcast_message))  # Handle broadcast messages
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & ~filters.Regex(r'^/'), handle_phone_number))
+    application.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, handle_broadcast_content))
     
     # Start the bot
     if os.getenv('RENDER'):
