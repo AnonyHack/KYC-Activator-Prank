@@ -86,6 +86,7 @@ WELCOME_MESSAGE = """
 /contactus - Contact support
 
 ⚠️ *Note:* This is just for fun! No real KYC is performed.
+━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
 # Enhanced animations
@@ -179,7 +180,8 @@ async def send_force_join_message(update: Update):
         "🔒 *Access Restricted* 🔒\n\n"
         "To use this bot, you must join our official channels:\n\n"
         "👉 Tap each button below to join\n"
-        "👉 Then click 'I've Joined' to verify",
+        "👉 Then click 'I've Joined' to verify"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━",
         reply_markup=reply_markup,
         parse_mode="Markdown"
     )
@@ -279,19 +281,17 @@ async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     leaderboard_text = "🏆 *KYC Activation Leaderboard* 🏆\n\n"
-    leaderboard_text += "┌──────────┬───────────────────────┐\n"
-    leaderboard_text += "│   Rank   │ User        │ Phone     │\n"
-    leaderboard_text += "├──────────┼───────────────────────┤\n"
+    leaderboard_text += "Rank | User       | Phone\n"
+    leaderboard_text += "-----|------------|-------\n"
     
     for idx, entry in enumerate(leaderboard_data[:10], 1):
-        username = entry.get('username', 'Anonymous')[:10]
+        username = entry.get('username', 'Anonymous').replace('|', '\\|')[:10]
         phone = entry.get('phone_number', 'N/A')[:6] + '***'
-        leaderboard_text += f"│ #{idx:<2} │ {username:<10} │ {phone:<10} │\n"
+        leaderboard_text += f"{idx:<4} | {username:<10} | {phone}\n"
     
-    leaderboard_text += "└──────────┴───────────────────────┘\n"
     leaderboard_text += f"\nTotal Activations: {len(leaderboard_data)}"
 
-    await update.message.reply_text(leaderboard_text, parse_mode="Markdown")
+    await update.message.reply_text(leaderboard_text, parse_mode="MarkdownV2")
 
 async def reset_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Enhanced reset leaderboard command."""
@@ -311,6 +311,7 @@ async def how_to_use(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Enhanced how-to-use command."""
     instructions = """
 📘 *KYC Activator Bot Guide* 📘
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 1️⃣ *Getting Started*
 - Use /start to begin
@@ -332,6 +333,7 @@ async def how_to_use(update: Update, context: ContextTypes.DEFAULT_TYPE):
 - No personal data is stored
 
 🎉 Enjoy the experience!
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
     await update.message.reply_text(instructions, parse_mode="Markdown")
 
@@ -340,7 +342,7 @@ async def contact_us(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [InlineKeyboardButton("📩 Message Admin", url="https://t.me/Silando")],
         [InlineKeyboardButton("📢 Announcements", url="https://t.me/megahubbots")],
-        [InlineKeyboardButton("💬 Support Group", url="https://t.me/Freenethubz")]
+        [InlineKeyboardButton("💬 Support Channel", url="https://t.me/Freenethubz")]
     ]
     
     contact_text = """
@@ -355,6 +357,7 @@ async def contact_us(update: Update, context: ContextTypes.DEFAULT_TYPE):
 - Feature requests
 
 🚫 *Please don't spam!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
     await update.message.reply_text(
         contact_text,
@@ -373,7 +376,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     stats_text = """
 📈 *Bot Statistics Dashboard* 📈
-
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
 👥 *Users:*
 ├─ Total: {}
 └─ Active Today: {}
@@ -385,6 +388,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ⚙️ *System:*
 ├─ Uptime: 99.9%
 └─ Status: Operational
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """.format(
         user_count,
         users_collection.count_documents({"join_date": {"$gte": datetime.now().strftime('%Y-%m-%d')}}),
@@ -395,74 +399,55 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(stats_text, parse_mode="Markdown")
 
 async def broadcast_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Advanced broadcast command supporting multiple media types."""
+    """Broadcast command to send a message to all users."""
     if not is_admin(update.effective_user.id):
         await update.message.reply_text("⛔ *Access Denied*", parse_mode="Markdown")
         return
 
-    # Check if we're replying to a message
-    if update.message.reply_to_message:
-        original_message = update.message.reply_to_message
-        user_ids = get_all_users()
-        success = 0
-        failures = 0
-
-        await update.message.reply_text(f"📢 Preparing to broadcast to {len(user_ids)} users...")
-
-        # Handle different message types
-        for user_id in user_ids:
-            try:
-                if original_message.text:
-                    await context.bot.send_message(
-                        user_id,
-                        text=original_message.text,
-                        parse_mode=original_message.parse_mode,
-                        reply_markup=original_message.reply_markup
-                    )
-                elif original_message.photo:
-                    await context.bot.send_photo(
-                        user_id,
-                        photo=original_message.photo[-1].file_id,
-                        caption=original_message.caption,
-                        parse_mode=original_message.parse_mode
-                    )
-                elif original_message.document:
-                    await context.bot.send_document(
-                        user_id,
-                        document=original_message.document.file_id,
-                        caption=original_message.caption,
-                        parse_mode=original_message.parse_mode
-                    )
-                elif original_message.poll:
-                    await context.bot.send_poll(
-                        user_id,
-                        question=original_message.poll.question,
-                        options=[option.text for option in original_message.poll.options],
-                        is_anonymous=original_message.poll.is_anonymous,
-                        allows_multiple_answers=original_message.poll.allows_multiple_answers
-                    )
-                
-                success += 1
-                await asyncio.sleep(0.1)  # Rate limiting
-            except Exception as e:
-                logger.warning(f"Failed to send to {user_id}: {e}")
-                failures += 1
-
+    if "broadcasting" not in context.user_data:
+        context.user_data["broadcasting"] = True
         await update.message.reply_text(
-            f"📊 *Broadcast Results*\n\n"
-            f"✅ Success: {success}\n"
-            f"❌ Failures: {failures}\n"
-            f"📩 Total Sent: {success + failures}",
+            "📢 *Broadcast Mode Enabled*\n\n"
+            "Please send the message you want to broadcast to all users.",
             parse_mode="Markdown"
         )
-    else:
-        await update.message.reply_text(
-            "ℹ️ *How to Broadcast*\n\n"
-            "1. Reply to any message (text, photo, document, poll) with /broadcast\n"
-            "2. The bot will forward it to all users\n\n"
-            "⚠️ *Note:* Formatting and media will be preserved",
-            parse_mode="Markdown"
-        )
+        return
+
+    # Broadcast the user's message
+    user_ids = get_all_users()
+    success = 0
+    failures = 0
+
+    for user_id in user_ids:
+        try:
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=update.message.text,
+                parse_mode="Markdown"
+            )
+            success += 1
+            await asyncio.sleep(0.1)  # Rate limiting
+        except Exception as e:
+            logger.warning(f"Failed to send to {user_id}: {e}")
+            failures += 1
+
+    await update.message.reply_text(
+        f"📊 *Broadcast Results*\n\n"
+        f"✅ Success: {success}\n"
+        f"❌ Failures: {failures}\n"
+        f"📩 Total Sent: {success + failures}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        parse_mode="Markdown"
+    )
+
+    # Reset broadcasting state
+    context.user_data["broadcasting"] = False
+
+# Message handler for broadcasting
+async def handle_broadcast_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle the message to be broadcasted."""
+    if context.user_data.get("broadcasting"):
+        await broadcast_message(update, context)
 
 # Main application setup
 def main():
@@ -485,6 +470,7 @@ def main():
     
     # Message handlers
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_phone_number))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_broadcast_message))  # Handle broadcast messages
     
     # Start the bot
     if os.getenv('RENDER'):
