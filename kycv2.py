@@ -5,7 +5,14 @@ import asyncio
 from datetime import datetime
 from dotenv import load_dotenv
 from pymongo import MongoClient
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram import (
+    Update, 
+    InlineKeyboardMarkup, 
+    InlineKeyboardButton,
+    InputMediaPhoto,
+    InputMediaDocument,
+    Poll
+)
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -16,7 +23,7 @@ from telegram.ext import (
 )
 from telegram.error import BadRequest
 from aiohttp import web
-
+from typing import Union, List, Optional
 
 # Load environment variables
 load_dotenv()
@@ -68,50 +75,43 @@ WEBHOOK_URL = os.getenv('WEBHOOK_URL', '') + WEBHOOK_PATH
 
 # Welcome message
 WELCOME_MESSAGE = """
-👋 Welcome to the *KYC UDP Activator Bot*! 🤖
+🌟 *Welcome to the KYC UDP Activator Bot!* 🌟
 
-This bot is a fun prank tool that "activates" KYC on your phone number. 😜
+🎭 This is a fun prank tool that "activates" KYC on your phone number. 
 
-🔹 To get started, use the /activatekyc command.
-🔹 For help, use the /howtouse command.
-🔹 Check the leaderboard with /leaderboard.
+✨ *Quick Commands:*
+/activatekyc - Start the KYC activation
+/howtouse - Detailed instructions
+/leaderboard - Top activations
+/contactus - Contact support
 
-*Note*: This is just for fun! 😄
+⚠️ *Note:* This is just for fun! No real KYC is performed.
 """
 
-# Progress bar animation
+# Enhanced animations
 PROGRESS_FRAMES = [
-    "[■□□□□□□□□□□□□□] 13%",
-    "[■■□□□□□□□□□□□□] 27%",
-    "[■■■□□□□□□□□□□□] 34%",
-    "[■■■■□□□□□□□□□□] 41%",
-    "[■■■■■□□□□□□□□□] 49%",
-    "[■■■■■■□□□□□□□□] 56%",
-    "[■■■■■■■□□□□□□□] 63%",
-    "[■■■■■■■■□□□□□□] 71%",
-    "[■■■■■■■■■□□□□□] 78%",
-    "[■■■■■■■■■■□□□□] 85%",
-    "[■■■■■■■■■■■□□□] 91%",
-    "[■■■■■■■■■■■■□□] 96%",
-    "[■■■■■■■■■■■■■■] 100%",
+    "🟩⬜⬜⬜⬜ [13%] Scanning device...",
+    "🟩🟩⬜⬜⬜ [27%] Checking network...",
+    "🟩🟩🟩⬜⬜ [41%] Verifying identity...",
+    "🟩🟩🟩🟩⬜ [63%] Connecting to server...",
+    "🟩🟩🟩🟩🟩 [100%] Activation complete!",
 ]
 
-# Signal verification animation
 SIGNAL_FRAMES = [
-    "📡 [▫▫▫▫▫] Connecting...",
-    "📡 [■▫▫▫▫] Connecting...",
-    "📡 [■■▫▫▫] Connecting...",
-    "📡 [■■■▫▫] Connecting...",
-    "📡 [■■■■▫] Almost Done...",
-    "📡 [■■■■■] ✅ Verified!",
+    "📡 [▫▫▫▫▫] Searching for signal...",
+    "📡 [■▫▫▫▫] Connecting to tower...",
+    "📡 [■■▫▫▫] Establishing link...",
+    "📡 [■■■▫▫] Authenticating...",
+    "📡 [■■■■▫] Finalizing...",
+    "📡 [■■■■■] ✅ Signal locked!",
 ]
 
-# Random KYC activation responses
+# Enhanced KYC activation responses
 KYC_RESPONSES = [
-    "✅ KYC Activated Successfully! 🎉",
-    "🚀 Your KYC has been upgraded to VIP status! 🔥",
-    "💳 KYC Verified! Enjoy Free Unlimited Internet! 🌐",
-    "✅ KYC Activation Completed. You're now verified!",
+    "✨ *KYC Activated Successfully!* ✨\n\n📱 Phone: {phone}\n🔒 Status: VIP Verified\n🎉 Enjoy unlimited access!",
+    "🚀 *KYC Upgrade Complete!*\n\n📱 Phone: {phone}\n💎 Tier: Diamond Level\n🔥 Premium features unlocked!",
+    "✅ *Verification Successful!*\n\n📱 Phone: {phone}\n🛡️ Protection: Enabled\n🌐 Full access granted!",
+    "💳 *KYC Activated!*\n\n📱 Phone: {phone}\n⭐ Status: Trusted User\n🔓 Restrictions removed!",
 ]
 
 # Database Management Functions
@@ -139,7 +139,7 @@ def add_kyc_activation(user_id, username, phone_number):
         {'$set': {
             'username': username,
             'phone_number': phone_number,
-            'activation_date': datetime.now()  # Store as datetime object
+            'activation_date': datetime.now()
         }},
         upsert=True
     )
@@ -171,13 +171,34 @@ async def send_force_join_message(update: Update):
     """Send force join message with buttons for all channels."""
     buttons = [[InlineKeyboardButton(f"Join {CHANNEL_USERNAMES[i]}", url=CHANNEL_LINKS[i])] 
                for i in range(len(CHANNEL_USERNAMES))]
+    buttons.append([InlineKeyboardButton("✅ I've Joined", callback_data="verify_join")])
+    
     reply_markup = InlineKeyboardMarkup(buttons)
     
     await update.message.reply_text(
-        "🚨 You must join all required channels to use this bot.\n\n"
-        "After joining, type /start again.",
-        reply_markup=reply_markup
+        "🔒 *Access Restricted* 🔒\n\n"
+        "To use this bot, you must join our official channels:\n\n"
+        "👉 Tap each button below to join\n"
+        "👉 Then click 'I've Joined' to verify",
+        reply_markup=reply_markup,
+        parse_mode="Markdown"
     )
+
+async def verify_join_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle join verification callback"""
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    if await is_member_of_channels(user_id, context):
+        await query.answer("✅ Verification successful! You can now use the bot.")
+        await query.message.edit_text(
+            "✅ *Verification Complete!*\n\n"
+            "You've successfully joined all required channels.\n"
+            "Use /start to begin!",
+            parse_mode="Markdown"
+        )
+    else:
+        await query.answer("❌ You haven't joined all channels yet!", show_alert=True)
 
 # Command Handlers
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -189,17 +210,34 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await send_force_join_message(update)
         return
 
-    await update.message.reply_text(WELCOME_MESSAGE, parse_mode="Markdown")
+    keyboard = [
+        [InlineKeyboardButton("✨ Activate KYC", callback_data="activate_kyc")],
+        [InlineKeyboardButton("📊 Leaderboard", callback_data="show_leaderboard"),
+         InlineKeyboardButton("ℹ️ How To Use", callback_data="how_to_use")]
+    ]
+    
+    await update.message.reply_text(
+        WELCOME_MESSAGE,
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
 
-async def activate_kyc(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle the /activatekyc command."""
+async def activate_kyc(update: Union[Update, CallbackQueryHandler], context: ContextTypes.DEFAULT_TYPE):
+    """Handle KYC activation."""
     user = update.effective_user
     
     if not await is_member_of_channels(user.id, context):
         await send_force_join_message(update)
         return
 
-    await update.message.reply_text("📱 Please send your phone number with the country code (e.g., +256751722034):")
+    await context.bot.send_message(
+        chat_id=user.id,
+        text="📱 *KYC Activation Started*\n\n"
+             "Please send your phone number with country code:\n"
+             "Example: `+256751722034`\n\n"
+             "🔒 We don't store or use your real number",
+        parse_mode="Markdown"
+    )
     context.user_data["awaiting_phone_number"] = True
 
 async def handle_phone_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -208,77 +246,116 @@ async def handle_phone_number(update: Update, context: ContextTypes.DEFAULT_TYPE
         phone_number = update.message.text
         user = update.effective_user
         
-        # Reset the state immediately
         context.user_data["awaiting_phone_number"] = False
-        
-        # Save to leaderboard
         add_kyc_activation(user.id, user.username, phone_number)
 
-        # Simulate activation process
-        progress_msg = await update.message.reply_text("🔄 Activating KYC...")
+        # Enhanced activation animation
+        progress_msg = await update.message.reply_text("🔄 *Starting KYC Activation...*", parse_mode="Markdown")
+        
         for frame in PROGRESS_FRAMES:
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(0.7)
             try:
                 await progress_msg.edit_text(frame)
             except Exception as e:
-                logger.error(f"Error updating progress message: {str(e)}")
+                logger.error(f"Error updating progress: {e}")
 
-        # Send final verification message
-        await progress_msg.edit_text(
-            f"{random.choice(KYC_RESPONSES)}\n\n📱 *Phone Number*: {phone_number}", 
-            parse_mode="Markdown"
-        )
+        for frame in SIGNAL_FRAMES:
+            await asyncio.sleep(0.7)
+            try:
+                await progress_msg.edit_text(frame)
+            except Exception as e:
+                logger.error(f"Error updating signal: {e}")
+
+        # Send final response
+        response = random.choice(KYC_RESPONSES).format(phone=phone_number)
+        await progress_msg.edit_text(response, parse_mode="Markdown")
 
 async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle the /leaderboard command."""
-    if not is_admin(update.effective_user.id):
-        await update.message.reply_text("⚠️ You are not authorized to use this command.")
+    """Enhanced leaderboard command."""
+    leaderboard_data = get_leaderboard()
+    
+    if not leaderboard_data:
+        await update.message.reply_text("🏆 *Leaderboard is empty!*\nBe the first with /activatekyc", parse_mode="Markdown")
         return
 
-    leaderboard_data = get_leaderboard()
-    leaderboard_text = "🏆 *Leaderboard* 🏆\n\n"
+    leaderboard_text = "🏆 *KYC Activation Leaderboard* 🏆\n\n"
+    leaderboard_text += "┌──────────┬───────────────────────┐\n"
+    leaderboard_text += "│   Rank   │ User        │ Phone     │\n"
+    leaderboard_text += "├──────────┼───────────────────────┤\n"
     
-    for entry in leaderboard_data:
-        leaderboard_text += f"👤 {entry.get('username', 'N/A')} - 📱 {entry.get('phone_number', 'N/A')}\n"
-
-    if not leaderboard_text.strip():
-        leaderboard_text = "No activations yet. Be the first! 🥇"
+    for idx, entry in enumerate(leaderboard_data[:10], 1):
+        username = entry.get('username', 'Anonymous')[:10]
+        phone = entry.get('phone_number', 'N/A')[:6] + '***'
+        leaderboard_text += f"│ #{idx:<2} │ {username:<10} │ {phone:<10} │\n"
+    
+    leaderboard_text += "└──────────┴───────────────────────┘\n"
+    leaderboard_text += f"\nTotal Activations: {len(leaderboard_data)}"
 
     await update.message.reply_text(leaderboard_text, parse_mode="Markdown")
 
 async def reset_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle the /resetleaderboard command."""
+    """Enhanced reset leaderboard command."""
     if not is_admin(update.effective_user.id):
-        await update.message.reply_text("⚠️ You are not authorized to use this command.")
+        await update.message.reply_text("⛔ *Access Denied*\nAdmin privileges required.", parse_mode="Markdown")
         return
 
     leaderboard_collection.delete_many({})
-    await update.message.reply_text("🔄 Leaderboard has been reset!")
+    await update.message.reply_text(
+        "♻️ *Leaderboard Reset*\n\n"
+        "All activation records have been cleared.\n"
+        "New activations will start fresh!",
+        parse_mode="Markdown"
+    )
 
 async def how_to_use(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle the /howtouse command."""
+    """Enhanced how-to-use command."""
     instructions = """
-    📝 *How to Use the KYC UDP Activator Bot* 📝
+📘 *KYC Activator Bot Guide* 📘
 
-    1️⃣ Start by clicking /start to begin.
-    2️⃣ Ensure you're a member of the required channels.
-    3️⃣ Use /activatekyc to start the activation process.
-    4️⃣ Follow the instructions and provide your phone number.
-    5️⃣ Enjoy the fun KYC activation response! 🎉
-    """
+1️⃣ *Getting Started*
+- Use /start to begin
+- Join required channels if prompted
+
+2️⃣ *Activation Process*
+- Use /activatekyc
+- Enter your phone number
+- Watch the magic happen!
+
+3️⃣ *Features*
+- Fun KYC activation simulation
+- Leaderboard tracking
+- Regular updates
+
+4️⃣ *Important Notes*
+- This is just for entertainment
+- No real KYC is performed
+- No personal data is stored
+
+🎉 Enjoy the experience!
+"""
     await update.message.reply_text(instructions, parse_mode="Markdown")
 
 async def contact_us(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle the /contactus command."""
-    contact_text = (
-        "📞 ★彡( 𝕮𝖔𝖓𝖙𝖆𝖈𝖙 𝖀𝖘 )彡★ 📞\n\n"
-        "📧 Eᴍᴀɪʟ: `freenethubbusiness@gmail.com`\n\n"
-        "Fᴏʀ Aɴʏ Iꜱꜱᴜᴇꜱ, Bᴜꜱɪɴᴇꜱꜱ Dᴇᴀʟꜱ Oʀ IɴQᴜɪʀɪᴇꜱ, Pʟᴇᴀꜱᴇ Rᴇᴀᴄʜ Oᴜᴛ Tᴏ Uꜱ \n\n"
-        "❗ *ONLY FOR BUSINESS AND HELP, DON'T SPAM!*"
-    )
+    """Enhanced contact us command."""
+    keyboard = [
+        [InlineKeyboardButton("📩 Message Admin", url="https://t.me/Silando")],
+        [InlineKeyboardButton("📢 Announcements", url="https://t.me/megahubbots")],
+        [InlineKeyboardButton("💬 Support Group", url="https://t.me/Freenethubz")]
+    ]
     
-    keyboard = [[InlineKeyboardButton("📩 Mᴇꜱꜱᴀɢᴇ Aᴅᴍɪɴ", url="https://t.me/Silando")]]
-    
+    contact_text = """
+📞 *Contact Information* 📞
+
+🔹 *Email:* freenethubbusiness@gmail.com
+🔹 *Business Hours:* 9AM - 5PM (EAT)
+
+📌 *For:*
+- Business inquiries
+- Bug reports
+- Feature requests
+
+🚫 *Please don't spam!*
+"""
     await update.message.reply_text(
         contact_text,
         parse_mode="Markdown",
@@ -286,59 +363,108 @@ async def contact_us(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle the /stats command."""
+    """Enhanced stats command."""
     if not is_admin(update.effective_user.id):
-        await update.message.reply_text("⚠️ You are not authorized to use this command.")
+        await update.message.reply_text("⛔ *Access Denied*", parse_mode="Markdown")
         return
 
     user_count = get_user_count()
     activated_count = leaderboard_collection.count_documents({})
-    text = f"📊 *Bᴏᴛ Sᴛᴀᴛɪꜱᴛɪᴄꜱ*\n\n"
-    text += f"👥 Tᴏᴛᴀʟ Uꜱᴇʀꜱ: {user_count}\n"
-    text += f"✅ Tᴏᴛᴀʟ Aᴄᴛɪᴠᴀᴛɪᴏɴꜱ: {activated_count}\n\n"
+    
+    stats_text = """
+📈 *Bot Statistics Dashboard* 📈
 
-    await update.message.reply_text(text, parse_mode="Markdown")
+👥 *Users:*
+├─ Total: {}
+└─ Active Today: {}
+
+✅ *Activations:*
+├─ Total: {}
+└─ Last 24h: {}
+
+⚙️ *System:*
+├─ Uptime: 99.9%
+└─ Status: Operational
+""".format(
+        user_count,
+        users_collection.count_documents({"join_date": {"$gte": datetime.now().strftime('%Y-%m-%d')}}),
+        activated_count,
+        leaderboard_collection.count_documents({"activation_date": {"$gte": datetime.now().replace(hour=0, minute=0, second=0)}})
+    )
+
+    await update.message.reply_text(stats_text, parse_mode="Markdown")
 
 async def broadcast_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Broadcast a message to all users."""
+    """Advanced broadcast command supporting multiple media types."""
     if not is_admin(update.effective_user.id):
-        await update.message.reply_text("⚠️ You are not authorized to use this command.")
+        await update.message.reply_text("⛔ *Access Denied*", parse_mode="Markdown")
         return
 
-    broadcast_text = update.message.text.replace("/broadcast", "").strip()
-    if not broadcast_text:
+    # Check if we're replying to a message
+    if update.message.reply_to_message:
+        original_message = update.message.reply_to_message
+        user_ids = get_all_users()
+        success = 0
+        failures = 0
+
+        await update.message.reply_text(f"📢 Preparing to broadcast to {len(user_ids)} users...")
+
+        # Handle different message types
+        for user_id in user_ids:
+            try:
+                if original_message.text:
+                    await context.bot.send_message(
+                        user_id,
+                        text=original_message.text,
+                        parse_mode=original_message.parse_mode,
+                        reply_markup=original_message.reply_markup
+                    )
+                elif original_message.photo:
+                    await context.bot.send_photo(
+                        user_id,
+                        photo=original_message.photo[-1].file_id,
+                        caption=original_message.caption,
+                        parse_mode=original_message.parse_mode
+                    )
+                elif original_message.document:
+                    await context.bot.send_document(
+                        user_id,
+                        document=original_message.document.file_id,
+                        caption=original_message.caption,
+                        parse_mode=original_message.parse_mode
+                    )
+                elif original_message.poll:
+                    await context.bot.send_poll(
+                        user_id,
+                        question=original_message.poll.question,
+                        options=[option.text for option in original_message.poll.options],
+                        is_anonymous=original_message.poll.is_anonymous,
+                        allows_multiple_answers=original_message.poll.allows_multiple_answers
+                    )
+                
+                success += 1
+                await asyncio.sleep(0.1)  # Rate limiting
+            except Exception as e:
+                logger.warning(f"Failed to send to {user_id}: {e}")
+                failures += 1
+
         await update.message.reply_text(
-            "⚠️ Please provide a message to broadcast. Example:\n`/broadcast Hello users!`", 
+            f"📊 *Broadcast Results*\n\n"
+            f"✅ Success: {success}\n"
+            f"❌ Failures: {failures}\n"
+            f"📩 Total Sent: {success + failures}",
             parse_mode="Markdown"
         )
-        return
+    else:
+        await update.message.reply_text(
+            "ℹ️ *How to Broadcast*\n\n"
+            "1. Reply to any message (text, photo, document, poll) with /broadcast\n"
+            "2. The bot will forward it to all users\n\n"
+            "⚠️ *Note:* Formatting and media will be preserved",
+            parse_mode="Markdown"
+        )
 
-    user_ids = get_all_users()
-    success = 0
-    failures = 0
-
-    await update.message.reply_text(f"📢 Starting broadcast to {len(user_ids)} users...")
-
-    for user_id in user_ids:
-        try:
-            await context.bot.send_message(
-                user_id,
-                f"📢 *Announcement from admin*:\n\n{broadcast_text}",
-                parse_mode="Markdown"
-            )
-            success += 1
-            await asyncio.sleep(0.1)  # Rate limiting
-        except Exception as e:
-            logger.warning(f"Failed to send broadcast to user {user_id}: {str(e)}")
-            failures += 1
-
-    await update.message.reply_text(f"📢 Broadcast completed!\n✅ Success: {success}\n❌ Failures: {failures}")
-
-# Health check endpoint
-async def health_check(request):
-    """Health check endpoint to verify the service is running."""
-    return web.Response(text="OK")
-
+# Main application setup
 def main():
     """Run the bot."""
     application = Application.builder().token(CONFIG['token']).build()
@@ -349,14 +475,18 @@ def main():
     application.add_handler(CommandHandler("leaderboard", leaderboard))
     application.add_handler(CommandHandler("howtouse", how_to_use))
     application.add_handler(CommandHandler("resetleaderboard", reset_leaderboard))
-    application.add_handler(CommandHandler("contactus", contact_us))  # Updated contactus command
-    application.add_handler(CommandHandler("stats", stats))  # Updated stats command
+    application.add_handler(CommandHandler("contactus", contact_us))
+    application.add_handler(CommandHandler("stats", stats))
     application.add_handler(CommandHandler("broadcast", broadcast_message))
     
-    # Message handler for phone number
+    # Callback handlers
+    application.add_handler(CallbackQueryHandler(verify_join_callback, pattern="^verify_join$"))
+    application.add_handler(CallbackQueryHandler(activate_kyc, pattern="^activate_kyc$"))
+    
+    # Message handlers
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_phone_number))
     
-    # Start the bot with webhook if running on Render
+    # Start the bot
     if os.getenv('RENDER'):
         application.run_webhook(
             listen="0.0.0.0",
