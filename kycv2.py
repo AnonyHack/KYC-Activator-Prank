@@ -70,7 +70,7 @@ if admins_collection.count_documents({}) == 0 and os.getenv('ADMIN_IDS'):
 PORT = int(os.getenv('PORT', 10000))
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET', '')
-WEBHOOK_URL = os.getenv('WEBHOOK_URL', 'https://kyc-activator-prank-f06p.onrender.com') + WEBHOOK_PATH
+WEBHOOK_URL = os.getenv('WEBHOOK_URL', '') + WEBHOOK_PATH
 
 # Welcome message
 WELCOME_MESSAGE = """
@@ -511,46 +511,41 @@ async def handle_phone_number(update: Update, context: ContextTypes.DEFAULT_TYPE
         await progress_msg.edit_text(response, parse_mode="Markdown")
 
 # Main application setup
-# Initialize the bot application in the global scope
-application = Application.builder().token(CONFIG['token']).build()
-
-# Command handlers
-application.add_handler(CommandHandler("start", start))
-application.add_handler(CommandHandler("activatekyc", activate_kyc))
-application.add_handler(CommandHandler("leaderboard", leaderboard))
-application.add_handler(CommandHandler("howtouse", how_to_use))
-application.add_handler(CommandHandler("contactus", contact_us))
-application.add_handler(CommandHandler("stats", stats))
-application.add_handler(CommandHandler("broadcast", broadcast_message))
-
-# Callback handlers
-application.add_handler(CallbackQueryHandler(verify_join_callback, pattern="^verify_join$"))
-
-application.add_handler(CallbackQueryHandler(activate_kyc, pattern="^activate_kyc$"))
-application.add_handler(CallbackQueryHandler(show_leaderboard, pattern="^show_leaderboard$"))
-application.add_handler(CallbackQueryHandler(how_to_use, pattern="^how_to_use$"))
-application.add_handler(CallbackQueryHandler(cancel_broadcast, pattern="^cancel_broadcast$"))
-
-# Message handlers
-application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & ~filters.Regex(r'^/'), handle_phone_number))
-application.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, handle_broadcast_content))
-
-# Start the bot
-if os.getenv('RENDER'):
-    WEBHOOK_URL = os.getenv('WEBHOOK_URL')
-    if not WEBHOOK_URL:
-        logger.error("WEBHOOK_URL environment variable not set!")
-        raise ValueError("WEBHOOK_URL environment variable not set")
+def main():
+    """Run the bot."""
+    application = Application.builder().token(CONFIG['token']).build()
     
-    full_webhook_url = f"{WEBHOOK_URL.rstrip('/')}{WEBHOOK_PATH}"
-    logger.info(f"Starting webhook with URL: {full_webhook_url}")
+    # Command handlers
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("activatekyc", activate_kyc))
+    application.add_handler(CommandHandler("leaderboard", leaderboard))
+    application.add_handler(CommandHandler("howtouse", how_to_use))
+    application.add_handler(CommandHandler("contactus", contact_us))
+    application.add_handler(CommandHandler("stats", stats))
+    application.add_handler(CommandHandler("broadcast", broadcast_message))
     
-    application.run_webhook(
-        listen="0.0.0.0",
-        port=PORT,
-        url_path=WEBHOOK_PATH,
-        webhook_url=full_webhook_url,
-        secret_token=WEBHOOK_SECRET
-    )
-else:
-    application.run_polling()
+    # Callback handlers
+    application.add_handler(CallbackQueryHandler(verify_join_callback, pattern="^verify_join$"))
+    
+    application.add_handler(CallbackQueryHandler(activate_kyc, pattern="^activate_kyc$"))
+    application.add_handler(CallbackQueryHandler(show_leaderboard, pattern="^show_leaderboard$"))
+    application.add_handler(CallbackQueryHandler(how_to_use, pattern="^how_to_use$"))
+    application.add_handler(CallbackQueryHandler(cancel_broadcast, pattern="^cancel_broadcast$"))
+    
+    # Message handlers
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & ~filters.Regex(r'^/'), handle_phone_number))
+    application.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, handle_broadcast_content))
+    
+    # Start the bot
+    if os.getenv('RENDER'):
+        application.run_webhook(
+            listen="0.0.0.0",
+            port=PORT,
+            url_path=WEBHOOK_PATH,
+            webhook_url=WEBHOOK_URL
+        )
+    else:
+        application.run_polling()
+
+if __name__ == "__main__":
+    main()
