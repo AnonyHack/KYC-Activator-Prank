@@ -50,7 +50,7 @@ CHANNEL_LINKS = os.getenv("CHANNEL_LINKS", "https://t.me/megahubbots,https://t.m
 
 # MongoDB connection
 client = MongoClient(os.getenv('MONGODB_URI'))
-db = client[os.getenv('DATABASE_NAME', '')]
+db = client[os.getenv('DATABASE_NAME', 'KYC_Bot')]
 
 # Collections
 users_collection = db['users']
