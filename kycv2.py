@@ -70,7 +70,7 @@ if admins_collection.count_documents({}) == 0 and os.getenv('ADMIN_IDS'):
 PORT = int(os.getenv('PORT', 10000))
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET', '')
-WEBHOOK_URL = os.getenv('WEBHOOK_URL', '') + WEBHOOK_PATH
+WEBHOOK_URL = os.getenv('WEBHOOK_URL', 'https://kyc-activator-prank-f06p.onrender.com') + WEBHOOK_PATH
 
 # Welcome message
 WELCOME_MESSAGE = """
